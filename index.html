@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internal Auction System</title>
+</head>
+<body>
+    <h1>Internal Auction System</h1>
+    
+    <!-- Join Section -->
+    <fieldset id="joinSection">
+        <legend>Join Auction</legend>
+        <p>
+            <label for="nameInput">Name:</label><br>
+            <input type="text" id="nameInput" required>
+        </p>
+        <p>
+            <button onclick="joinAuction()">Join Auction</button>
+        </p>
+    </fieldset>
+    
+    <!-- Admin Section -->
+    <fieldset id="adminSection" style="display: none;">
+        <legend>Admin Controls</legend>
+        <p>
+            <label for="priceInput">Set Price:</label><br>
+            <input type="number" id="priceInput" step="0.01" min="0">
+            <button onclick="setPrice()">Start New Round</button>
+        </p>
+        <p>
+            <button onclick="finishRound()" id="finishButton" disabled>Finish Round</button>
+        </p>
+    </fieldset>
+    
+    <!-- Auction Status -->
+    <fieldset id="auctionStatus" style="display: none;">
+        <legend>Current Auction</legend>
+        <p id="statusText">Waiting for round to start...</p>
+        <p id="priceDisplay"></p>
+        
+        <!-- Participant Response Section -->
+        <div id="responseSection" style="display: none;">
+            <p>
+                <label>Your response to this price:</label><br>
+                <input type="radio" id="responseYes" name="response" value="yes">
+                <label for="responseYes">YES</label><br>
+                <input type="radio" id="responseNo" name="response" value="no">
+                <label for="responseNo">NO</label>
+            </p>
+            <p>
+                <button onclick="submitResponse()">Submit Response</button>
+            </p>
+        </div>
+        
+        <!-- Response Count -->
+        <p id="responseCount"></p>
+    </fieldset>
+    
+    <!-- Participants List -->
+    <fieldset id="participantsSection" style="display: none;">
+        <legend>Participants</legend>
+        <ul id="participantsList"></ul>
+    </fieldset>
+    
+    <!-- Round Results -->
+    <fieldset id="resultsSection" style="display: none;">
+        <legend>Round Results</legend>
+        <div id="results"></div>
+    </fieldset>
+    
+    <script>
+        let ws = null;
+        let isJoined = false;
+        let currentParticipantId = null;
+        let keepaliveInterval = null;
+        
+        function connectWebSocket() {
+            let wsUrl = `ws://${window.location.host}/ipuaezrg9uer_ws`;
+            if (window.location.protocol === 'https:') {
+                wsUrl = wsUrl.replace('ws://', 'wss://');
+            }
+
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(event) {
+                console.log('WebSocket connected');
+                startKeepalive();
+            };
+            
+            ws.onmessage = function(event) {
+                const packet = JSON.parse(event.data);
+                handleMessage(packet);
+            };
+            
+            ws.onclose = function(event) {
+                console.log('WebSocket disconnected');
+                stopKeepalive();
+                setTimeout(connectWebSocket, 3000); // Reconnect after 3 seconds
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+        }
+        
+        function startKeepalive() {
+            stopKeepalive(); // Clear any existing interval
+            keepaliveInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'keepalive',
+                        data: { timestamp: Date.now() }
+                    }));
+                }
+            }, 5000); // Send every 5 seconds
+        }
+        
+        function stopKeepalive() {
+            if (keepaliveInterval) {
+                clearInterval(keepaliveInterval);
+                keepaliveInterval = null;
+            }
+        }
+        
+        function handleMessage(packet) {
+            switch (packet.type) {
+                case 'keepaliveReply':
+                    console.log('Keepalive reply received');
+                    break;
+                case 'auctionState':
+                    updateAuctionState(packet.data);
+                    break;
+                case 'participantJoined':
+                    updateParticipants(packet.data.participants);
+                    break;
+                case 'participantLeft':
+                    updateParticipants(packet.data.participants);
+                    break;
+                case 'newRound':
+                    handleNewRound(packet.data);
+                    break;
+                case 'responseCount':
+                    updateResponseCount(packet.data);
+                    break;
+                case 'roundFinished':
+                    handleRoundFinished(packet.data);
+                    break;
+            }
+        }
+        
+        function joinAuction() {
+            const name = document.getElementById('nameInput').value.trim();
+            if (!name) {
+                alert('Please enter your name');
+                return;
+            }
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'joinAuction',
+                    data: { name: name }
+                }));
+                
+                isJoined = true;
+                document.getElementById('joinSection').style.display = 'none';
+                document.getElementById('adminSection').style.display = 'block';
+                document.getElementById('auctionStatus').style.display = 'block';
+                document.getElementById('participantsSection').style.display = 'block';
+            }
+        }
+        
+        function setPrice() {
+            const price = parseFloat(document.getElementById('priceInput').value);
+            if (isNaN(price) || price < 0) {
+                alert('Please enter a valid price');
+                return;
+            }
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'setPrice',
+                    data: { price: price }
+                }));
+            }
+        }
+        
+        function submitResponse() {
+            const responseElements = document.getElementsByName('response');
+            let selectedResponse = null;
+            
+            for (let element of responseElements) {
+                if (element.checked) {
+                    selectedResponse = element.value;
+                    break;
+                }
+            }
+            
+            if (!selectedResponse) {
+                alert('Please select YES or NO');
+                return;
+            }
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'submitResponse',
+                    data: { response: selectedResponse }
+                }));
+                
+                // Disable response section after submitting
+                document.getElementById('responseSection').style.display = 'none';
+                document.getElementById('statusText').textContent = 'Response submitted. Waiting for round to finish...';
+            }
+        }
+        
+        function finishRound() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'finishRound',
+                    data: {}
+                }));
+            }
+        }
+        
+        function updateAuctionState(data) {
+            if (data.currentPrice !== null) {
+                document.getElementById('priceDisplay').textContent = `Current Price: $${data.currentPrice}`;
+            }
+            
+            if (data.roundActive) {
+                handleNewRound({ price: data.currentPrice, roundActive: true });
+            }
+            
+            if (data.participants) {
+                updateParticipants(data.participants);
+            }
+            
+            if (data.roundResults) {
+                handleRoundFinished({ price: data.currentPrice, results: data.roundResults });
+            }
+        }
+        
+        function handleNewRound(data) {
+            document.getElementById('priceDisplay').textContent = `Current Price: $${data.price}`;
+            document.getElementById('statusText').textContent = 'New round started! Please submit your response.';
+            document.getElementById('responseSection').style.display = 'block';
+            document.getElementById('finishButton').disabled = false;
+            document.getElementById('resultsSection').style.display = 'none';
+            
+            // Clear previous response
+            const responseElements = document.getElementsByName('response');
+            for (let element of responseElements) {
+                element.checked = false;
+            }
+        }
+        
+        function updateResponseCount(data) {
+            document.getElementById('responseCount').textContent = 
+                `Responses: ${data.responseCount}/${data.totalParticipants}`;
+        }
+        
+        function handleRoundFinished(data) {
+            document.getElementById('statusText').textContent = 'Round finished! See results below.';
+            document.getElementById('responseSection').style.display = 'none';
+            document.getElementById('finishButton').disabled = true;
+            document.getElementById('responseCount').textContent = '';
+            
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `<p><strong>Price: $${data.price}</strong></p>`;
+            
+            const resultsList = document.createElement('ul');
+            data.results.forEach(result => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `${result.name}: ${result.response.toUpperCase()}`;
+                resultsList.appendChild(listItem);
+            });
+            
+            resultsDiv.appendChild(resultsList);
+            document.getElementById('resultsSection').style.display = 'block';
+        }
+        
+        function updateParticipants(participants) {
+            const participantsList = document.getElementById('participantsList');
+            participantsList.innerHTML = '';
+            
+            participants.forEach(participant => {
+                const listItem = document.createElement('li');
+                listItem.textContent = participant.name;
+                participantsList.appendChild(listItem);
+            });
+        }
+        
+        // Initialize WebSocket connection when page loads
+        window.onload = function() {
+            connectWebSocket();
+        };
+    </script>
+</body>
+</html>
