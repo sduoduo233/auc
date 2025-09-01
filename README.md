@@ -32,4 +32,4 @@ Someone sets a price, everyone votes YES or NO.
     node index.js
     ```
 
-3. Visit `http://localhost:3000`
+3. Visit `http://localhost:3000/ipuaezrg9uer`
