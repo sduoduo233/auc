@@ -2,8 +2,16 @@
 
 This is a **web app for running live auctions** where people can vote on prices in real-time.
 
+## Demo
 
 [video.webm](https://github.com/user-attachments/assets/c76aacd9-3bc4-474e-8ac3-3aa6b2d5a63c)
+
+
+## Deploy to vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fsduoduo233%2Fauc%2Ftree%2Fmain&project-name=auc)
+
+Visit path `/ipuaezrg9uer` after deploying
 
 
 ## What it does
