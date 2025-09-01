@@ -5,7 +5,7 @@ This is a **web app for running live auctions** where people can vote on prices 
 ![Demo video](https://raw.githubusercontent.com/sduoduo233/auc/refs/heads/main/video.avif)
 
 
-![Click here to download the video if your browser can't play animated avif](https://github.com/sduoduo233/auc/raw/refs/heads/main/video.webm)
+[Click here to download the video if your browser can't play animated avif](https://github.com/sduoduo233/auc/raw/refs/heads/main/video.webm)
 
 ## What it does
 Someone sets a price, everyone votes YES or NO.
